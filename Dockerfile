@@ -12,7 +12,7 @@ FROM ubuntu:jammy
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates tzdata \
  && rm -rf /var/lib/apt/lists/*
-RUN useradd --user-group --create-home --system --skip-log-init --home-dir /app vapor
+RUN useradd --user-group --create-home --system --no-log-init --home-dir /app vapor
 WORKDIR /app
 COPY --from=build --chown=vapor:vapor /build/.build/release/App /app/App
 RUN mkdir /data && chown vapor:vapor /data
