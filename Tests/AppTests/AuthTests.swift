@@ -200,6 +200,52 @@ final class AuthTests: XCTestCase {
         XCTAssertEqual(newPhone, .ok)
     }
 
+    // MARK: - wards / excluded
+
+    private func names(_ path: String, token: String) async throws -> (HTTPStatus, [String]) {
+        var result: (HTTPStatus, [String]) = (.ok, [])
+        try await app.test(.GET, path, headers: ["Authorization": "Bearer \(token)"]) { res async throws in
+            result = (res.status, res.status == .ok ? try res.content.decode([ParticipantDTO].self).map(\.name) : [])
+        }
+        return result
+    }
+
+    func testListWardsAndExcluded() async throws {
+        let (_, token) = try await login("karen")
+        let (_, otherToken) = try await login("luis")
+        let event = try await createEvent("Navidad", token: token)
+        let (_, a) = try await addParticipant(event.id, "Ana", token: token)
+        let (_, b) = try await addParticipant(event.id, "Bruno", token: token)
+        let (_, c) = try await addParticipant(event.id, "Carla", token: token)
+        let ana = try XCTUnwrap(a?.id), bruno = try XCTUnwrap(b?.id), carla = try XCTUnwrap(c?.id)
+        for kid in ["Pablo", "Lucía"] {
+            _ = try await send(.POST, "events/\(event.id)/participants",
+                               ParticipantRequest(name: kid, phone: nil, guardianId: ana), token: token)
+        }
+        // Ana ↔ Bruno y Ana ↔ Carla (cada exclusión se crea en ambos sentidos).
+        for other in [bruno, carla] {
+            try await app.test(.POST, "events/\(event.id)/exclusions", beforeRequest: { req async throws in
+                req.headers.bearerAuthorization = .init(token: token)
+                try req.content.encode(ExclusionRequest(giverId: ana, receiverId: other))
+            }, afterResponse: { res async throws in XCTAssertEqual(res.status, .ok) })
+        }
+
+        let base = "events/\(event.id)/participants"
+        let anaWards = try await names("\(base)/\(ana)/wards", token: token)
+        XCTAssertEqual(anaWards.1, ["Lucía", "Pablo"])
+        let brunoWards = try await names("\(base)/\(bruno)/wards", token: token)
+        XCTAssertEqual(brunoWards.1, [])
+
+        let anaExcluded = try await names("\(base)/\(ana)/excluded", token: token)
+        XCTAssertEqual(anaExcluded.1, ["Bruno", "Carla"])
+        let brunoExcluded = try await names("\(base)/\(bruno)/excluded", token: token)
+        XCTAssertEqual(brunoExcluded.1, ["Ana"])
+
+        // Otro organizador no puede consultarlo.
+        let foreign = try await names("\(base)/\(ana)/wards", token: otherToken)
+        XCTAssertEqual(foreign.0, .notFound)
+    }
+
     // MARK: - PATCH /events/:id
 
     private func patch(_ id: UUID, _ json: String, token: String) async throws -> (HTTPStatus, EventDTO?) {

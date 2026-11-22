@@ -15,6 +15,8 @@ struct EventController: RouteCollection {
             e.post("participants", use: addParticipant)
             e.put("participants", ":participantID", use: updateParticipant)
             e.delete("participants", ":participantID", use: deleteParticipant)
+            e.get("participants", ":participantID", "wards", use: listWards)
+            e.get("participants", ":participantID", "excluded", use: listExcluded)
 
             e.post("exclusions", use: addExclusion)
             e.delete("exclusions", ":exclusionID", use: deleteExclusion)
@@ -136,11 +138,35 @@ struct EventController: RouteCollection {
         return .noContent
     }
 
-    /// Nombres de los participantes que tienen a `p` como tutor.
-    private func wards(of p: Participant, db: Database) async throws -> [String] {
+    /// GET /events/:id/participants/:pid/wards — participantes que tienen a :pid como tutor.
+    @Sendable func listWards(req: Request) async throws -> [ParticipantDTO] {
+        let event = try await findEvent(req)
+        let p = try await findParticipant(req, eventID: try event.requireID())
+        return try await wardsOf(p, db: req.db).map(ParticipantDTO.init)
+    }
+
+    /// GET /events/:id/participants/:pid/excluded — participantes a los que :pid no puede
+    /// regalar (aparece como `giverId` en sus exclusiones).
+    @Sendable func listExcluded(req: Request) async throws -> [ParticipantDTO] {
+        let event = try await findEvent(req)
+        let p = try await findParticipant(req, eventID: try event.requireID())
+        let pid = try p.requireID()
+        let receiverIDs = try await Exclusion.query(on: req.db)
+            .filter(\.$giver.$id == pid).all().map(\.$receiver.id)
+        guard !receiverIDs.isEmpty else { return [] }
+        return try await Participant.query(on: req.db)
+            .filter(\.$id ~~ receiverIDs).sort(\.$name).all().map(ParticipantDTO.init)
+    }
+
+    /// Participantes que tienen a `p` como tutor, ordenados por nombre.
+    private func wardsOf(_ p: Participant, db: Database) async throws -> [Participant] {
         let pid = try p.requireID()
         return try await Participant.query(on: db)
-            .filter(\.$guardian.$id == pid).sort(\.$name).all().map(\.name)
+            .filter(\.$guardian.$id == pid).sort(\.$name).all()
+    }
+
+    private func wards(of p: Participant, db: Database) async throws -> [String] {
+        try await wardsOf(p, db: db).map(\.name)
     }
 
     // MARK: - Exclusiones

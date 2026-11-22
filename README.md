@@ -45,6 +45,8 @@ Todas requieren `Authorization: Bearer <token de sesión>`.
 | PATCH | `/events/:id` | Cambiar `name` y/o `date` (solo lo enviado; `"date": null` quita la fecha). Permitido tras el sorteo |
 | POST | `/events/:id/participants` | Añadir participante |
 | PUT/DELETE | `/events/:id/participants/:pid` | Editar / quitar. `409` si es tutor de alguien y se intenta borrar o quitarle el teléfono |
+| GET | `/events/:id/participants/:pid/wards` | Participantes que tienen a `:pid` como tutor (`guardianId`) |
+| GET | `/events/:id/participants/:pid/excluded` | Participantes a los que `:pid` no puede regalar (`:pid` es `giverId` en la exclusión) |
 | POST | `/events/:id/exclusions` | Excluir un par (en ambos sentidos) |
 | DELETE | `/events/:id/exclusions/:xid` | Quitar exclusión |
 | POST | `/events/:id/draw[?redraw=true]` | Sortear (repetir invalida enlaces). `422` si alguien no tiene teléfono ni tutor con teléfono |
