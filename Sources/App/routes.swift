@@ -6,7 +6,10 @@ func routes(_ app: Application) throws {
     // Público: solo se entra con el token del enlace.
     try app.register(collection: RevealController())
 
-    // Organizador: requiere ADMIN_TOKEN como Bearer.
-    let admin = app.grouped(AdminAuthMiddleware())
-    try admin.register(collection: EventController())
+    // Login con Apple / Google → token de sesión.
+    try app.register(collection: AuthController())
+
+    // Organizador: requiere el token de sesión como Bearer.
+    let organizer = app.grouped(SessionAuthenticator(), User.guardMiddleware())
+    try organizer.register(collection: EventController())
 }

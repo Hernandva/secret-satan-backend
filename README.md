@@ -13,8 +13,30 @@ Backend (Swift + Vapor + SQLite) de la app de amigo secreto.
    "Mostrar" y ve su amigo secreto. El enlace se consume. Si se pierde, el organizador
    genera uno nuevo (`POST /events/:id/participants/:pid/link`).
 
+## Login (Sign in with Apple / Google)
+El organizador entra en la app con Apple o Google. La app envía el **ID token** (JWT) del
+proveedor al servidor, que verifica la firma (claves públicas de Apple/Google), el emisor,
+la caducidad y la audiencia (`APPLE_BUNDLE_ID` / `GOOGLE_CLIENT_ID`). Si es válido,
+devuelve un **token de sesión** propio (30 días, se renueva al usarlo) que la app envía
+como `Authorization: Bearer <token>` en el resto de la API.
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/auth/apple` | `{ "idToken": "<identityToken>", "nonce": "<nonce en claro>", "name": "Ana" }` → `{ token, expiresAt, user }` |
+| POST | `/auth/google` | `{ "idToken": "<idToken>", "nonce": "<nonce en claro>" }` → `{ token, expiresAt, user }` |
+| GET | `/auth/me` | Usuario actual |
+| POST | `/auth/logout` | Invalida la sesión actual |
+| DELETE | `/auth/me` | Borra la cuenta y todos sus eventos (requisito de App Store) |
+
+- **Nonce** (opcional, recomendado): la app genera un nonce aleatorio, pasa su SHA-256 en hex al
+  proveedor (`ASAuthorizationAppleIDRequest.nonce` / `GIDSignIn ... nonce:`) y envía el nonce en
+  claro en `nonce`. Si el token lleva nonce, debe coincidir.
+- **name**: Apple solo da el nombre a la app en el primer login; mándalo entonces.
+- Cada organizador solo ve sus propios eventos. Los eventos creados antes de este cambio
+  (sin dueño) dejan de ser accesibles por la API.
+
 ## API del organizador
-Todas requieren `Authorization: Bearer <ADMIN_TOKEN>`.
+Todas requieren `Authorization: Bearer <token de sesión>`.
 
 | Método | Ruta | Descripción |
 |---|---|---|
@@ -32,7 +54,7 @@ Pública: `GET /health`, `GET /r/:token`, `POST /r/:token`.
 
 ## Desarrollo local
 ```bash
-export ADMIN_TOKEN=$(openssl rand -hex 32)
+export APPLE_BUNDLE_ID=dev.hdvillamil.secretsanta   # y/o GOOGLE_CLIENT_ID=...
 swift run App serve
 swift test
 ```
@@ -47,6 +69,6 @@ Cloudflare: Zero Trust → Networks → Tunnels → crear túnel → copiar el t
 → Public hostname `secretsanta.hdvillamil.dev` → servicio `http://api:8080`.
 
 ## Notas de seguridad
-- Los tokens de los enlaces son aleatorios de 256 bits; en la base de datos solo se guarda su hash.
+- Los tokens de los enlaces y de sesión son aleatorios de 256 bits; en la base de datos solo se guarda su hash.
 - El `GET` del enlace no lo consume (las vistas previas de WhatsApp/iMessage lo quemarían); lo consume el `POST` del botón.
 - La API del organizador nunca devuelve las asignaciones. Quien tenga acceso al fichero SQLite sí podría verlas.

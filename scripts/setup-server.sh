@@ -18,18 +18,22 @@ fi
 cd "$DEST"
 
 if [ ! -f .env ]; then
-  ADMIN_TOKEN="$(openssl rand -hex 32)"
+  read -r -p "Bundle ID de la app iOS (Sign in with Apple, vacío si no): " APPLE_BUNDLE_ID
+  read -r -p "Client ID iOS de Google (vacío si no): " GOOGLE_CLIENT_ID
+  if [ -z "$APPLE_BUNDLE_ID" ] && [ -z "$GOOGLE_CLIENT_ID" ]; then
+    echo "✗ Hace falta al menos uno de los dos para el login."; exit 1
+  fi
   read -r -p "TUNNEL_TOKEN de Cloudflare: " TUNNEL_TOKEN
   umask 077
   cat > .env <<EOF
-ADMIN_TOKEN=$ADMIN_TOKEN
+APPLE_BUNDLE_ID=$APPLE_BUNDLE_ID
+GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
 TUNNEL_TOKEN=$TUNNEL_TOKEN
 BASE_URL=https://secretsanta.hdvillamil.dev
 EOF
-  echo
-  echo "✓ .env creado. ADMIN_TOKEN para la app iOS (guárdalo ahora):"
-  echo "  $ADMIN_TOKEN"
-  echo
+  echo "✓ .env creado."
+elif grep -q '^ADMIN_TOKEN=' .env && ! grep -qE '^(APPLE_BUNDLE_ID|GOOGLE_CLIENT_ID)=.+' .env; then
+  echo "✗ Tu .env aún usa ADMIN_TOKEN. Añade APPLE_BUNDLE_ID y/o GOOGLE_CLIENT_ID (ver .env.example)."; exit 1
 fi
 
 mkdir -p data backups

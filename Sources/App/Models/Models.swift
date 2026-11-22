@@ -1,10 +1,57 @@
 import Fluent
 import Vapor
 
+/// Organizador que ha iniciado sesión con Apple o Google.
+final class User: Model, Authenticatable, @unchecked Sendable {
+    static let schema = "users"
+
+    @ID(key: .id) var id: UUID?
+    /// "apple" o "google"
+    @Field(key: "provider") var provider: String
+    /// Identificador estable del usuario en el proveedor (claim `sub`).
+    @Field(key: "subject") var subject: String
+    @OptionalField(key: "email") var email: String?
+    @OptionalField(key: "name") var name: String?
+    @Timestamp(key: "created_at", on: .create) var createdAt: Date?
+
+    init() {}
+
+    init(id: UUID? = nil, provider: String, subject: String, email: String?, name: String?) {
+        self.id = id
+        self.provider = provider
+        self.subject = subject
+        self.email = email
+        self.name = name
+    }
+}
+
+/// Sesión propia del servidor, emitida tras verificar el token de Apple o Google.
+final class UserSession: Model, @unchecked Sendable {
+    static let schema = "user_sessions"
+
+    @ID(key: .id) var id: UUID?
+    @Parent(key: "user_id") var user: User
+    /// Solo se guarda el hash SHA-256 del token de sesión.
+    @Field(key: "token_hash") var tokenHash: String
+    @Timestamp(key: "created_at", on: .create) var createdAt: Date?
+    @Field(key: "expires_at") var expiresAt: Date
+
+    init() {}
+
+    init(id: UUID? = nil, userID: UUID, tokenHash: String, expiresAt: Date) {
+        self.id = id
+        self.$user.id = userID
+        self.tokenHash = tokenHash
+        self.expiresAt = expiresAt
+    }
+}
+
 final class Event: Model, @unchecked Sendable {
     static let schema = "events"
 
     @ID(key: .id) var id: UUID?
+    /// Organizador dueño del evento. Los eventos creados antes del login no tienen dueño.
+    @OptionalParent(key: "owner_id") var owner: User?
     @Field(key: "name") var name: String
     @OptionalField(key: "date") var date: Date?
     @OptionalField(key: "budget") var budget: Double?
@@ -14,8 +61,9 @@ final class Event: Model, @unchecked Sendable {
 
     init() {}
 
-    init(id: UUID? = nil, name: String, date: Date?, budget: Double?) {
+    init(id: UUID? = nil, ownerID: UUID, name: String, date: Date?, budget: Double?) {
         self.id = id
+        self.$owner.id = ownerID
         self.name = name
         self.date = date
         self.budget = budget

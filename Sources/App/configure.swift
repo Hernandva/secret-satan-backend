@@ -1,11 +1,17 @@
 import Vapor
 import Fluent
 import FluentSQLiteDriver
+import JWT
 
 public func configure(_ app: Application) async throws {
-    guard let token = Environment.get("ADMIN_TOKEN"), token.count >= 16 else {
-        fatalError("Define ADMIN_TOKEN (mínimo 16 caracteres) en el entorno.")
+    let appleBundleID = Environment.get("APPLE_BUNDLE_ID").nilIfEmpty
+    let googleClientID = Environment.get("GOOGLE_CLIENT_ID").nilIfEmpty
+    guard appleBundleID != nil || googleClientID != nil else {
+        fatalError("Define APPLE_BUNDLE_ID y/o GOOGLE_CLIENT_ID en el entorno para el login.")
     }
+    // Audiencia esperada en los ID tokens (además se pasa explícita en cada verificación).
+    app.jwt.apple.applicationIdentifier = appleBundleID
+    app.jwt.google.applicationIdentifier = googleClientID
 
     // Fechas en ISO 8601 para la app iOS.
     let encoder = JSONEncoder()
@@ -16,9 +22,10 @@ public func configure(_ app: Application) async throws {
     ContentConfiguration.global.use(decoder: decoder, for: .json)
 
     let dbPath = Environment.get("DATABASE_PATH") ?? "db.sqlite"
-    app.databases.use(.sqlite(.file(dbPath)), as: .sqlite)
+    app.databases.use(.sqlite(dbPath == ":memory:" ? .memory : .file(dbPath)), as: .sqlite)
 
     app.migrations.add(CreateSchema())
+    app.migrations.add(AddUsers())
     try await app.autoMigrate()
 
     try routes(app)

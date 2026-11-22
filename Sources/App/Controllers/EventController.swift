@@ -29,14 +29,17 @@ struct EventController: RouteCollection {
     // MARK: - Eventos
 
     @Sendable func list(req: Request) async throws -> [EventDTO] {
-        let events = try await Event.query(on: req.db).sort(\.$createdAt, .descending).all()
+        let userID = try req.auth.require(User.self).requireID()
+        let events = try await Event.query(on: req.db)
+            .filter(\.$owner.$id == userID).sort(\.$createdAt, .descending).all()
         return try await events.asyncMap { try await eventDTO($0, db: req.db) }
     }
 
     @Sendable func create(req: Request) async throws -> EventDTO {
         let body = try req.content.decode(CreateEventRequest.self)
         guard !body.name.trimmed.isEmpty else { throw Abort(.badRequest, reason: "El nombre es obligatorio.") }
-        let event = Event(name: body.name.trimmed, date: body.date, budget: body.budget)
+        let userID = try req.auth.require(User.self).requireID()
+        let event = Event(ownerID: userID, name: body.name.trimmed, date: body.date, budget: body.budget)
         try await event.save(on: req.db)
         return try await eventDTO(event, db: req.db)
     }
@@ -240,8 +243,12 @@ struct EventController: RouteCollection {
 
     // MARK: - Utilidades
 
+    /// Busca el evento solo entre los del usuario autenticado (404 si es de otro).
     private func findEvent(_ req: Request) async throws -> Event {
-        guard let event = try await Event.find(req.parameters.get("eventID"), on: req.db) else {
+        let userID = try req.auth.require(User.self).requireID()
+        guard let eventID = req.parameters.get("eventID", as: UUID.self),
+              let event = try await Event.query(on: req.db)
+                .filter(\.$id == eventID).filter(\.$owner.$id == userID).first() else {
             throw Abort(.notFound)
         }
         return event

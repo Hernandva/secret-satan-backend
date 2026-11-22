@@ -1,5 +1,40 @@
 import Vapor
 
+// MARK: - Auth
+
+/// Body de `POST /auth/apple` y `POST /auth/google`.
+struct SignInRequest: Content {
+    /// ID token (JWT) que la app recibe de Apple (`identityToken`) o Google (`idToken`).
+    var idToken: String
+    /// Nonce en claro; el token debe llevar su SHA-256 en hex. Opcional pero recomendado.
+    var nonce: String?
+    /// Nombre a mostrar (Apple solo lo entrega a la app en el primer login).
+    var name: String?
+}
+
+struct UserDTO: Content {
+    var id: UUID
+    var provider: String
+    var email: String?
+    var name: String?
+
+    init(_ u: User) throws {
+        self.id = try u.requireID()
+        self.provider = u.provider
+        self.email = u.email
+        self.name = u.name
+    }
+}
+
+struct SessionDTO: Content {
+    /// Token de sesión: enviarlo como `Authorization: Bearer <token>`.
+    var token: String
+    var expiresAt: Date
+    var user: UserDTO
+}
+
+// MARK: - Eventos
+
 struct CreateEventRequest: Content {
     var name: String
     var date: Date?

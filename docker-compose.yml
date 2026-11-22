@@ -3,7 +3,8 @@ services:
     build: .
     restart: unless-stopped
     environment:
-      ADMIN_TOKEN: ${ADMIN_TOKEN:?define ADMIN_TOKEN en .env}
+      APPLE_BUNDLE_ID: ${APPLE_BUNDLE_ID:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       BASE_URL: ${BASE_URL:-https://secretsanta.hdvillamil.dev}
     volumes:
       - ./data:/data
