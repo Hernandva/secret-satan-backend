@@ -41,6 +41,37 @@ struct CreateEventRequest: Content {
     var budget: Double?
 }
 
+/// Body de `PATCH /events/:id`. Solo cambia lo que se envía:
+/// - campo ausente → se deja como está
+/// - `"date": null` → se quita la fecha
+struct UpdateEventRequest: Content {
+    var name: String?
+    var date: Date?
+    /// true si el JSON incluía la clave `date` (aunque fuera null).
+    var hasDate: Bool
+
+    enum CodingKeys: String, CodingKey { case name, date }
+
+    init(name: String? = nil, date: Date? = nil, hasDate: Bool = false) {
+        self.name = name
+        self.date = date
+        self.hasDate = hasDate || date != nil
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        hasDate = c.contains(.date)
+        date = try c.decodeIfPresent(Date.self, forKey: .date)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(name, forKey: .name)
+        if hasDate { try c.encode(date, forKey: .date) }
+    }
+}
+
 struct ParticipantRequest: Content {
     var name: String
     var phone: String?

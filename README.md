@@ -42,6 +42,7 @@ Todas requieren `Authorization: Bearer <token de sesión>`.
 |---|---|---|
 | GET/POST | `/events` | Listar / crear evento |
 | GET/DELETE | `/events/:id` | Detalle (participantes y exclusiones, nunca asignaciones) / borrar |
+| PATCH | `/events/:id` | Cambiar `name` y/o `date` (solo lo enviado; `"date": null` quita la fecha). Permitido tras el sorteo |
 | POST | `/events/:id/participants` | Añadir participante |
 | PUT/DELETE | `/events/:id/participants/:pid` | Editar / quitar |
 | POST | `/events/:id/exclusions` | Excluir un par (en ambos sentidos) |

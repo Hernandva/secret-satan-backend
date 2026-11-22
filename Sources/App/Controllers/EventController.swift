@@ -9,6 +9,7 @@ struct EventController: RouteCollection {
 
         events.group(":eventID") { e in
             e.get(use: detail)
+            e.patch(use: update)
             e.delete(use: delete)
 
             e.post("participants", use: addParticipant)
@@ -57,6 +58,22 @@ struct EventController: RouteCollection {
                 ExclusionDTO(id: try $0.requireID(), giverId: $0.$giver.id, receiverId: $0.$receiver.id)
             }
         )
+    }
+
+    /// Cambia el nombre y/o la fecha. Se permite también tras el sorteo: no afecta a las asignaciones.
+    @Sendable func update(req: Request) async throws -> EventDTO {
+        let event = try await findEvent(req)
+        let body = try req.content.decode(UpdateEventRequest.self)
+        guard body.name != nil || body.hasDate else {
+            throw Abort(.badRequest, reason: "Indica el nombre o la fecha a cambiar.")
+        }
+        if let name = body.name {
+            guard !name.trimmed.isEmpty else { throw Abort(.badRequest, reason: "El nombre es obligatorio.") }
+            event.name = name.trimmed
+        }
+        if body.hasDate { event.date = body.date }
+        try await event.save(on: req.db)
+        return try await eventDTO(event, db: req.db)
     }
 
     @Sendable func delete(req: Request) async throws -> HTTPStatus {
