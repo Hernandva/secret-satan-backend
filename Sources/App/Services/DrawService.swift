@@ -6,12 +6,10 @@ enum DrawError: Error {
 }
 
 /// Sorteo con restricciones mediante backtracking.
-/// Reglas: nadie se toca a sí mismo, nadie toca a alguien de su misma unidad familiar
-/// y se respetan los pares prohibidos.
+/// Reglas: nadie se toca a sí mismo y se respetan los pares prohibidos (exclusiones).
 enum DrawService {
     struct Person {
         let id: UUID
-        let family: String?
     }
 
     struct Pair: Hashable {
@@ -20,16 +18,11 @@ enum DrawService {
     }
 
     /// Devuelve un diccionario giver -> receiver.
-    static func draw(
-        people: [Person],
-        forbidden: Set<Pair>,
-        blockSameFamily: Bool = true
-    ) throws -> [UUID: UUID] {
+    static func draw(people: [Person], forbidden: Set<Pair>) throws -> [UUID: UUID] {
         guard people.count >= 2 else { throw DrawError.notEnoughPeople }
 
         func allowed(_ giver: Person, _ receiver: Person) -> Bool {
             if giver.id == receiver.id { return false }
-            if blockSameFamily, let f = giver.family, !f.isEmpty, f == receiver.family { return false }
             return !forbidden.contains(Pair(giver: giver.id, receiver: receiver.id))
         }
 

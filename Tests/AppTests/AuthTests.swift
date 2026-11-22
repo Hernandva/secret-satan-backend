@@ -122,7 +122,7 @@ final class AuthTests: XCTestCase {
         var result: (HTTPStatus, ParticipantDTO?) = (.ok, nil)
         try await app.test(.POST, "events/\(eventID)/participants", beforeRequest: { req async throws in
             req.headers.bearerAuthorization = .init(token: token)
-            try req.content.encode(ParticipantRequest(name: name, phone: "+34600000000", family: nil, guardianId: nil))
+            try req.content.encode(ParticipantRequest(name: name, phone: "+34600000000", guardianId: nil))
         }, afterResponse: { res async throws in
             result = (res.status, res.status == .ok ? try res.content.decode(ParticipantDTO.self) : nil)
         })
@@ -149,6 +149,55 @@ final class AuthTests: XCTestCase {
         }
         let count = try await Participant.query(on: app.db).filter(\.$event.$id == event.id).count()
         XCTAssertEqual(count, 2)
+    }
+
+    // MARK: - Contactos y tutores
+
+    private func send(_ method: HTTPMethod, _ path: String, _ body: ParticipantRequest, token: String) async throws -> (HTTPStatus, String?) {
+        var result: (HTTPStatus, String?) = (.ok, nil)
+        try await app.test(method, path, beforeRequest: { req async throws in
+            req.headers.bearerAuthorization = .init(token: token)
+            try req.content.encode(body)
+        }, afterResponse: { res async throws in
+            result = (res.status, res.body.string)
+        })
+        return result
+    }
+
+    func testDrawRejectsParticipantsWithoutContact() async throws {
+        let (_, token) = try await login("irene")
+        let event = try await createEvent("Navidad", token: token)
+        _ = try await addParticipant(event.id, "Ana", token: token)
+        _ = try await addParticipant(event.id, "Bruno", token: token)
+        // Estado que la API ya no permite crear, pero puede venir de datos antiguos.
+        try await Participant(eventID: event.id, name: "Lucía", phone: nil, guardianID: nil).save(on: app.db)
+
+        try await app.test(.POST, "events/\(event.id)/draw", headers: ["Authorization": "Bearer \(token)"]) { res async throws in
+            XCTAssertEqual(res.status, .unprocessableEntity)
+            XCTAssertTrue(res.body.string.contains("Lucía"))
+        }
+        let assignments = try await Assignment.query(on: app.db).count()
+        XCTAssertEqual(assignments, 0)
+    }
+
+    func testGuardianCannotBeDeletedOrLosePhone() async throws {
+        let (_, token) = try await login("javier")
+        let event = try await createEvent("Navidad", token: token)
+        let (_, ana) = try await addParticipant(event.id, "Ana", token: token)
+        let anaID = try XCTUnwrap(ana?.id)
+        let (s, _) = try await send(.POST, "events/\(event.id)/participants",
+                                    ParticipantRequest(name: "Lucía", phone: nil, guardianId: anaID), token: token)
+        XCTAssertEqual(s, .ok)
+
+        let anaPath = "events/\(event.id)/participants/\(anaID)"
+        try await app.test(.DELETE, anaPath, headers: ["Authorization": "Bearer \(token)"]) { res async throws in
+            XCTAssertEqual(res.status, .conflict)
+            XCTAssertTrue(res.body.string.contains("Lucía"))
+        }
+        let (noPhone, _) = try await send(.PUT, anaPath, ParticipantRequest(name: "Ana", phone: "  ", guardianId: nil), token: token)
+        XCTAssertEqual(noPhone, .conflict)
+        let (newPhone, _) = try await send(.PUT, anaPath, ParticipantRequest(name: "Ana", phone: "+34611111111", guardianId: nil), token: token)
+        XCTAssertEqual(newPhone, .ok)
     }
 
     // MARK: - PATCH /events/:id

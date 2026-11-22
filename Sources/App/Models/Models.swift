@@ -79,18 +79,15 @@ final class Participant: Model, @unchecked Sendable {
     @Field(key: "name") var name: String
     /// Los niños pequeños no tienen teléfono: reciben el enlace a través de su tutor.
     @OptionalField(key: "phone") var phone: String?
-    /// Unidad familiar: quienes comparten valor no se tocan entre sí.
-    @OptionalField(key: "family") var family: String?
     @OptionalParent(key: "guardian_id") var guardian: Participant?
 
     init() {}
 
-    init(id: UUID? = nil, eventID: UUID, name: String, phone: String?, family: String?, guardianID: UUID?) {
+    init(id: UUID? = nil, eventID: UUID, name: String, phone: String?, guardianID: UUID?) {
         self.id = id
         self.$event.id = eventID
         self.name = name
         self.phone = phone
-        self.family = family
         self.$guardian.id = guardianID
     }
 }

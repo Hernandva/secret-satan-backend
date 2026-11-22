@@ -96,7 +96,6 @@ struct EventController: RouteCollection {
             eventID: eventID,
             name: body.name.trimmed,
             phone: body.phone.nilIfEmpty,
-            family: body.family.nilIfEmpty,
             guardianID: body.guardianId
         )
         try await p.save(on: req.db)
@@ -108,10 +107,16 @@ struct EventController: RouteCollection {
         let eventID = try event.requireID()
         let p = try await findParticipant(req, eventID: eventID)
         let body = try req.content.decode(ParticipantRequest.self)
+        // Un tutor no puede quedarse sin teléfono (aunque él mismo pase a tener tutor).
+        if body.phone.nilIfEmpty == nil {
+            let wards = try await wards(of: p, db: req.db)
+            if !wards.isEmpty {
+                throw Abort(.conflict, reason: "\(p.name) es tutor de \(wards.joined(separator: ", ")) y necesita teléfono. Asígnales otro tutor antes de quitarlo.")
+            }
+        }
         try await validate(body, eventID: eventID, selfID: try p.requireID(), db: req.db)
         p.name = body.name.trimmed
         p.phone = body.phone.nilIfEmpty
-        p.family = body.family.nilIfEmpty
         p.$guardian.id = body.guardianId
         try await p.save(on: req.db)
         return ParticipantDTO(p)
@@ -123,8 +128,19 @@ struct EventController: RouteCollection {
             throw Abort(.conflict, reason: "El sorteo ya se hizo; no se pueden quitar participantes.")
         }
         let p = try await findParticipant(req, eventID: try event.requireID())
+        let wards = try await wards(of: p, db: req.db)
+        if !wards.isEmpty {
+            throw Abort(.conflict, reason: "\(p.name) es tutor de \(wards.joined(separator: ", ")). Asígnales otro tutor antes de quitarlo.")
+        }
         try await p.delete(on: req.db)
         return .noContent
+    }
+
+    /// Nombres de los participantes que tienen a `p` como tutor.
+    private func wards(of p: Participant, db: Database) async throws -> [String] {
+        let pid = try p.requireID()
+        return try await Participant.query(on: db)
+            .filter(\.$guardian.$id == pid).sort(\.$name).all().map(\.name)
     }
 
     // MARK: - Exclusiones
@@ -181,9 +197,22 @@ struct EventController: RouteCollection {
         }
 
         let participants = try await Participant.query(on: req.db).filter(\.$event.$id == eventID).all()
+
+        // Cada persona debe poder recibir su enlace: teléfono propio o un tutor con teléfono.
+        let byID = Dictionary(uniqueKeysWithValues: participants.compactMap { p in p.id.map { ($0, p) } })
+        let unreachable = participants.filter { p in
+            guard p.phone.nilIfEmpty == nil else { return false }
+            guard let gid = p.$guardian.id, let guardian = byID[gid] else { return true }
+            return guardian.phone.nilIfEmpty == nil
+        }
+        if !unreachable.isEmpty {
+            let names = unreachable.map(\.name).sorted().joined(separator: ", ")
+            throw Abort(.unprocessableEntity, reason: "Sin teléfono ni tutor con teléfono: \(names). Corrígelo antes del sorteo.")
+        }
+
         let exclusions = try await Exclusion.query(on: req.db).filter(\.$event.$id == eventID).all()
         let forbidden = Set(exclusions.map { DrawService.Pair(giver: $0.$giver.id, receiver: $0.$receiver.id) })
-        let people = try participants.map { DrawService.Person(id: try $0.requireID(), family: $0.family) }
+        let people = try participants.map { DrawService.Person(id: try $0.requireID()) }
 
         let result: [UUID: UUID]
         do {

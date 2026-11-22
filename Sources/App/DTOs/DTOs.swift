@@ -75,7 +75,6 @@ struct UpdateEventRequest: Content {
 struct ParticipantRequest: Content {
     var name: String
     var phone: String?
-    var family: String?
     var guardianId: UUID?
 }
 
@@ -97,14 +96,12 @@ struct ParticipantDTO: Content {
     var id: UUID
     var name: String
     var phone: String?
-    var family: String?
     var guardianId: UUID?
 
     init(_ p: Participant) {
         self.id = p.id!
         self.name = p.name
         self.phone = p.phone
-        self.family = p.family
         self.guardianId = p.$guardian.id
     }
 }

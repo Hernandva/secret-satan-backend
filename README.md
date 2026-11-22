@@ -4,9 +4,9 @@ Backend (Swift + Vapor + SQLite) de la app de amigo secreto.
 
 ## Flujo
 1. El organizador crea un evento y da de alta a los participantes desde la app iOS
-   (nombre, teléfono, unidad familiar y, para los niños, el tutor que recibe su enlace).
-2. `POST /events/:id/draw` hace el sorteo en el servidor (sin autoasignación, sin misma
-   unidad familiar, respetando exclusiones).
+   (nombre, teléfono y, para los niños, el tutor que recibe su enlace).
+2. `POST /events/:id/draw` hace el sorteo en el servidor (sin autoasignación y
+   respetando exclusiones).
 3. `POST /events/:id/links` genera un enlace de un solo uso por participante; la app los
    comparte con la hoja "Compartir" de iOS (a todos o a uno).
 4. Cada persona abre su enlace `https://secretsanta.hdvillamil.dev/r/<token>`, pulsa
@@ -44,10 +44,10 @@ Todas requieren `Authorization: Bearer <token de sesión>`.
 | GET/DELETE | `/events/:id` | Detalle (participantes y exclusiones, nunca asignaciones) / borrar |
 | PATCH | `/events/:id` | Cambiar `name` y/o `date` (solo lo enviado; `"date": null` quita la fecha). Permitido tras el sorteo |
 | POST | `/events/:id/participants` | Añadir participante |
-| PUT/DELETE | `/events/:id/participants/:pid` | Editar / quitar |
+| PUT/DELETE | `/events/:id/participants/:pid` | Editar / quitar. `409` si es tutor de alguien y se intenta borrar o quitarle el teléfono |
 | POST | `/events/:id/exclusions` | Excluir un par (en ambos sentidos) |
 | DELETE | `/events/:id/exclusions/:xid` | Quitar exclusión |
-| POST | `/events/:id/draw[?redraw=true]` | Sortear (repetir invalida enlaces) |
+| POST | `/events/:id/draw[?redraw=true]` | Sortear (repetir invalida enlaces). `422` si alguien no tiene teléfono ni tutor con teléfono |
 | POST | `/events/:id/links` | Generar enlaces para todos |
 | POST | `/events/:id/participants/:pid/link` | Generar enlace de uno |
 
