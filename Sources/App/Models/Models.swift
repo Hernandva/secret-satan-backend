@@ -148,3 +148,15 @@ final class RevealLink: Model, @unchecked Sendable {
         self.tokenHash = tokenHash
     }
 }
+
+extension Event {
+    /// "Nombre del evento · 24 de diciembre de 2026" (sin fecha si el evento no la tiene).
+    var label: String {
+        guard let date else { return name }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "es_ES")
+        f.timeZone = TimeZone(identifier: "Europe/Madrid")
+        f.dateFormat = "d 'de' MMMM 'de' y"
+        return "\(name) · \(f.string(from: date))"
+    }
+}

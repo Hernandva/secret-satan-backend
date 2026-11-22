@@ -308,7 +308,12 @@ struct EventController: RouteCollection {
         let deliverName = (p.phone.nilIfEmpty == nil ? guardian?.name : nil) ?? p.name
         let deliverPhone = p.phone.nilIfEmpty ?? guardian?.phone
 
-        let message = "🎁 Amigo secreto de \(p.name) (\(event.name)). Abre el enlace tú solo: funciona una única vez.\n\(url)"
+        let message = """
+            Hola \(p.name).
+            Abre el enlace para descubrir quién es tu amigo secreto 🎁
+            \(event.label)
+            \(url)
+            """
         return LinkDTO(
             participantId: pid,
             name: p.name,

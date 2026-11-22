@@ -28,7 +28,7 @@ struct RevealController: RouteCollection {
         let giver = try await link.$giver.get(on: req.db)
         let event = try await link.$event.get(on: req.db)
         // La vista previa la ve cualquiera en el chat: solo el evento, nunca nombres de personas.
-        return page("Amigo invisible", eyebrow: eventLabel(event), previewTitle: eventLabel(event), """
+        return page("Amigo invisible", eyebrow: event.label, previewTitle: event.label, """
             <h1>Hola, \(esc(giver.name))</h1>
             <p class="lead">Pulsa «Revelar» para ver el nombre de tu amigo invisible. Que no se entere nadie.</p>
             <form method="post" action="/r/\(token)"><button type="submit" class="btn">Revelar</button></form>
@@ -45,7 +45,7 @@ struct RevealController: RouteCollection {
         let event = try await link.$event.get(on: req.db)
         guard let assignment = try await Assignment.query(on: req.db)
             .filter(\.$giver.$id == giverID).with(\.$receiver).first() else {
-            return page("Sin sorteo", eyebrow: eventLabel(event), """
+            return page("Sin sorteo", eyebrow: event.label, """
                 <h1>Todavía no hay sorteo</h1>
                 <p class="lead">Pide al organizador que lo repita.</p>
                 """)
@@ -54,7 +54,7 @@ struct RevealController: RouteCollection {
         link.usedAt = Date()
         try await link.save(on: req.db)
 
-        return page("Tu amigo invisible", eyebrow: eventLabel(event), """
+        return page("Tu amigo invisible", eyebrow: event.label, """
             <p class="lead">Le haces el regalo a</p>
             <h1 class="name" id="name">\(esc(assignment.receiver.name))</h1>
             <p class="lead">Es un secreto. Feliz Navidad.</p>
@@ -84,16 +84,6 @@ struct RevealController: RouteCollection {
 
     private func findLink(_ token: String, db: Database) async throws -> RevealLink? {
         try await RevealLink.query(on: db).filter(\.$tokenHash == Tokens.hash(token)).first()
-    }
-
-    /// "Nombre del evento · 24 de diciembre de 2026" (sin fecha si el evento no la tiene).
-    private func eventLabel(_ event: Event) -> String {
-        guard let date = event.date else { return event.name }
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "es_ES")
-        f.timeZone = TimeZone(identifier: "Europe/Madrid")
-        f.dateFormat = "d 'de' MMMM 'de' y"
-        return "\(event.name) · \(f.string(from: date))"
     }
 
     private func invalid() -> Response {
