@@ -302,8 +302,7 @@ struct EventController: RouteCollection {
         let token = Tokens.make()
         try await RevealLink(eventID: try event.requireID(), giverID: pid, tokenHash: Tokens.hash(token)).save(on: db)
 
-        let base = Environment.get("BASE_URL") ?? "https://secretsanta.hdvillamil.dev"
-        let url = "\(base)/r/\(token)"
+        let url = "\(Environment.baseURL)/r/\(token)"
 
         let guardian = try await p.$guardian.get(on: db)
         let deliverName = (p.phone.nilIfEmpty == nil ? guardian?.name : nil) ?? p.name

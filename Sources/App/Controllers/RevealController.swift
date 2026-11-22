@@ -10,6 +10,15 @@ struct RevealController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
         routes.get("r", ":token", use: confirm)
         routes.post("r", ":token", use: reveal)
+        routes.get("og.png", use: ogImage)
+    }
+
+    /// Imagen de la vista previa del enlace (og:image).
+    @Sendable func ogImage(req: Request) async throws -> Response {
+        var headers = HTTPHeaders()
+        headers.contentType = .png
+        headers.replaceOrAdd(name: .cacheControl, value: "public, max-age=86400")
+        return Response(status: .ok, headers: headers, body: .init(data: OGImage.png))
     }
 
     @Sendable func confirm(req: Request) async throws -> Response {
@@ -18,7 +27,8 @@ struct RevealController: RouteCollection {
         if link.usedAt != nil { return alreadyUsed() }
         let giver = try await link.$giver.get(on: req.db)
         let event = try await link.$event.get(on: req.db)
-        return page("Amigo invisible", eyebrow: eventLabel(event), """
+        // La vista previa la ve cualquiera en el chat: solo el evento, nunca nombres de personas.
+        return page("Amigo invisible", eyebrow: eventLabel(event), previewTitle: eventLabel(event), """
             <h1>Hola, \(esc(giver.name))</h1>
             <p class="lead">Pulsa «Revelar» para ver el nombre de tu amigo invisible. Que no se entere nadie.</p>
             <form method="post" action="/r/\(token)"><button type="submit" class="btn">Revelar</button></form>
@@ -147,8 +157,11 @@ struct RevealController: RouteCollection {
         </svg>
         """
 
-    private func page(_ title: String, eyebrow: String? = nil, _ body: String, status: HTTPStatus = .ok) -> Response {
+    private func page(_ title: String, eyebrow: String? = nil, previewTitle: String = "Amigo invisible",
+                      _ body: String, status: HTTPStatus = .ok) -> Response {
         let eyebrowHTML = eyebrow.map { "<div class=\"eyebrow\">\(esc($0))</div>" } ?? ""
+        let previewDescription = "Descubre a quién le haces el regalo. El enlace solo se puede abrir una vez."
+        let ogImage = "\(Environment.baseURL)/og.png"
         let html = """
         <!doctype html>
         <html lang="es"><head>
@@ -156,6 +169,18 @@ struct RevealController: RouteCollection {
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="robots" content="noindex, nofollow">
         <meta name="theme-color" content="#000000">
+        <meta name="description" content="\(esc(previewDescription))">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="Amigo invisible">
+        <meta property="og:locale" content="es_ES">
+        <meta property="og:title" content="\(esc(previewTitle))">
+        <meta property="og:description" content="\(esc(previewDescription))">
+        <meta property="og:image" content="\(esc(ogImage))">
+        <meta property="og:image:type" content="image/png">
+        <meta property="og:image:width" content="1200">
+        <meta property="og:image:height" content="630">
+        <meta property="og:image:alt" content="Árbol de Navidad con regalos y el texto Amigo invisible">
+        <meta name="twitter:card" content="summary_large_image">
         <title>\(esc(title))</title>
         <style>
           :root { color-scheme: dark; --bg: #000000; --fg: #FFFFFF; --muted: #AEAEB2; }

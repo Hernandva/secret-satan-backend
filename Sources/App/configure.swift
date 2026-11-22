@@ -3,6 +3,14 @@ import Fluent
 import FluentSQLiteDriver
 import JWT
 
+extension Environment {
+    /// URL pública del servidor (enlaces que se envían y URLs absolutas de la vista previa).
+    static var baseURL: String {
+        (Environment.get("BASE_URL") ?? "https://secretsanta.hdvillamil.dev")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+}
+
 public func configure(_ app: Application) async throws {
     let appleBundleID = Environment.get("APPLE_BUNDLE_ID").nilIfEmpty
     let googleClientID = Environment.get("GOOGLE_CLIENT_ID").nilIfEmpty
