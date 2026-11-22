@@ -200,6 +200,46 @@ final class AuthTests: XCTestCase {
         XCTAssertEqual(newPhone, .ok)
     }
 
+    // MARK: - Niño → tutor
+
+    func testWardNeverGivesToGuardian() async throws {
+        let (_, token) = try await login("marta")
+        let auth: HTTPHeaders = ["Authorization": "Bearer \(token)"]
+        let event = try await createEvent("Navidad", token: token)
+        let (_, a) = try await addParticipant(event.id, "Ana", token: token)
+        _ = try await addParticipant(event.id, "Bruno", token: token)
+        let ana = try XCTUnwrap(a?.id)
+        let (status, _) = try await send(.POST, "events/\(event.id)/participants",
+                                         ParticipantRequest(name: "Lucía", phone: nil, guardianId: ana), token: token)
+        XCTAssertEqual(status, .ok)
+        let lucia = try await Participant.query(on: app.db).filter(\.$name == "Lucía").first()
+        let luciaID = try XCTUnwrap(lucia?.id)
+
+        var guardianGaveToWard = false
+        for i in 0..<30 {
+            try await app.test(.POST, "events/\(event.id)/draw\(i > 0 ? "?redraw=true" : "")", headers: auth) { res async throws in
+                XCTAssertEqual(res.status, .ok)
+            }
+            let fromLucia = try await Assignment.query(on: app.db).filter(\.$giver.$id == luciaID).first()
+            XCTAssertNotEqual(fromLucia?.$receiver.id, ana, "Lucía no debe regalar a su tutora")
+            let fromAna = try await Assignment.query(on: app.db).filter(\.$giver.$id == ana).first()
+            if fromAna?.$receiver.id == luciaID { guardianGaveToWard = true }
+        }
+        XCTAssertTrue(guardianGaveToWard, "El tutor sí puede regalar a su niño")
+    }
+
+    func testDrawImpossibleWhenOnlyGuardianAndWard() async throws {
+        let (_, token) = try await login("nora")
+        let event = try await createEvent("Navidad", token: token)
+        let (_, a) = try await addParticipant(event.id, "Ana", token: token)
+        let ana = try XCTUnwrap(a?.id)
+        _ = try await send(.POST, "events/\(event.id)/participants",
+                           ParticipantRequest(name: "Lucía", phone: nil, guardianId: ana), token: token)
+        try await app.test(.POST, "events/\(event.id)/draw", headers: ["Authorization": "Bearer \(token)"]) { res async throws in
+            XCTAssertEqual(res.status, .unprocessableEntity)
+        }
+    }
+
     // MARK: - wards / excluded
 
     private func names(_ path: String, token: String) async throws -> (HTTPStatus, [String]) {

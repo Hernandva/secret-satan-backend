@@ -237,7 +237,14 @@ struct EventController: RouteCollection {
         }
 
         let exclusions = try await Exclusion.query(on: req.db).filter(\.$event.$id == eventID).all()
-        let forbidden = Set(exclusions.map { DrawService.Pair(giver: $0.$giver.id, receiver: $0.$receiver.id) })
+        var forbidden = Set(exclusions.map { DrawService.Pair(giver: $0.$giver.id, receiver: $0.$receiver.id) })
+        // Un niño no puede regalar a su tutor: el tutor recibe el enlace del niño y descubriría el secreto.
+        // (El tutor sí puede regalar al niño.)
+        for p in participants {
+            if let pid = p.id, let gid = p.$guardian.id {
+                forbidden.insert(DrawService.Pair(giver: pid, receiver: gid))
+            }
+        }
         let people = try participants.map { DrawService.Person(id: try $0.requireID()) }
 
         let result: [UUID: UUID]
@@ -246,7 +253,7 @@ struct EventController: RouteCollection {
         } catch DrawError.notEnoughPeople {
             throw Abort(.unprocessableEntity, reason: "Hacen falta al menos 2 participantes.")
         } catch {
-            throw Abort(.unprocessableEntity, reason: "No existe un sorteo válido con estas restricciones. Prueba a quitar alguna exclusión.")
+            throw Abort(.unprocessableEntity, reason: "No existe un sorteo válido con estas restricciones (exclusiones y niños que no pueden regalar a su tutor). Prueba a quitar alguna exclusión o a añadir participantes.")
         }
 
         try await req.db.transaction { db in
