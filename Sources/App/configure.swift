@@ -35,6 +35,7 @@ public func configure(_ app: Application) async throws {
     app.migrations.add(CreateSchema())
     app.migrations.add(AddUsers())
     app.migrations.add(RemoveParticipantFamily())
+    app.migrations.add(AddEventMessage())
     try await app.autoMigrate()
 
     try routes(app)

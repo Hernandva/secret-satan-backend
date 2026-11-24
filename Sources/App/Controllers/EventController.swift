@@ -42,7 +42,8 @@ struct EventController: RouteCollection {
         let body = try req.content.decode(CreateEventRequest.self)
         guard !body.name.trimmed.isEmpty else { throw Abort(.badRequest, reason: "El nombre es obligatorio.") }
         let userID = try req.auth.require(User.self).requireID()
-        let event = Event(ownerID: userID, name: body.name.trimmed, date: body.date, budget: body.budget)
+        let event = Event(ownerID: userID, name: body.name.trimmed, date: body.date, budget: body.budget,
+                          message: try normalizedMessage(body.message))
         try await event.save(on: req.db)
         return try await eventDTO(event, db: req.db)
     }
@@ -62,18 +63,19 @@ struct EventController: RouteCollection {
         )
     }
 
-    /// Cambia el nombre y/o la fecha. Se permite también tras el sorteo: no afecta a las asignaciones.
+    /// Cambia el nombre, la fecha y/o el mensaje. Se permite también tras el sorteo: no afecta a las asignaciones.
     @Sendable func update(req: Request) async throws -> EventDTO {
         let event = try await findEvent(req)
         let body = try req.content.decode(UpdateEventRequest.self)
-        guard body.name != nil || body.hasDate else {
-            throw Abort(.badRequest, reason: "Indica el nombre o la fecha a cambiar.")
+        guard body.name != nil || body.hasDate || body.hasMessage else {
+            throw Abort(.badRequest, reason: "Indica el nombre, la fecha o el mensaje a cambiar.")
         }
         if let name = body.name {
             guard !name.trimmed.isEmpty else { throw Abort(.badRequest, reason: "El nombre es obligatorio.") }
             event.name = name.trimmed
         }
         if body.hasDate { event.date = body.date }
+        if body.hasMessage { event.message = try normalizedMessage(body.message) }
         try await event.save(on: req.db)
         return try await eventDTO(event, db: req.db)
     }
@@ -311,7 +313,6 @@ struct EventController: RouteCollection {
         let message = """
             Hola \(p.name).
             Abre el enlace para descubrir quién es tu amigo secreto 🎁
-            \(event.label)
             \(url)
             """
         return LinkDTO(
@@ -364,7 +365,19 @@ struct EventController: RouteCollection {
     private func eventDTO(_ e: Event, db: Database) async throws -> EventDTO {
         let id = try e.requireID()
         let count = try await Participant.query(on: db).filter(\.$event.$id == id).count()
-        return EventDTO(id: id, name: e.name, date: e.date, budget: e.budget, status: e.status, participantCount: count)
+        return EventDTO(id: id, name: e.name, date: e.date, budget: e.budget, message: e.message,
+                        status: e.status, participantCount: count)
+    }
+
+    static let maxMessageLength = 500
+
+    /// Mensaje sin espacios sobrantes; vacío → nil (la web usa la cita por defecto).
+    private func normalizedMessage(_ message: String?) throws -> String? {
+        guard let text = message?.trimmed, !text.isEmpty else { return nil }
+        guard text.count <= Self.maxMessageLength else {
+            throw Abort(.badRequest, reason: "El mensaje no puede pasar de \(Self.maxMessageLength) caracteres.")
+        }
+        return text
     }
 }
 

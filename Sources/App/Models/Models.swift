@@ -55,18 +55,21 @@ final class Event: Model, @unchecked Sendable {
     @Field(key: "name") var name: String
     @OptionalField(key: "date") var date: Date?
     @OptionalField(key: "budget") var budget: Double?
+    /// Texto que se muestra al pie de la web del enlace. nil → cita de Navidad por defecto.
+    @OptionalField(key: "message") var message: String?
     /// "draft" (aún sin sortear) o "drawn" (sorteado)
     @Field(key: "status") var status: String
     @Timestamp(key: "created_at", on: .create) var createdAt: Date?
 
     init() {}
 
-    init(id: UUID? = nil, ownerID: UUID, name: String, date: Date?, budget: Double?) {
+    init(id: UUID? = nil, ownerID: UUID, name: String, date: Date?, budget: Double?, message: String? = nil) {
         self.id = id
         self.$owner.id = ownerID
         self.name = name
         self.date = date
         self.budget = budget
+        self.message = message
         self.status = "draft"
     }
 }

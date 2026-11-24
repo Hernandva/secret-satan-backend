@@ -53,7 +53,7 @@ struct RevealController: RouteCollection {
         let giver = try await link.$giver.get(on: req.db)
         let event = try await link.$event.get(on: req.db)
         // La vista previa la ve cualquiera en el chat: solo el evento, nunca nombres de personas.
-        return page("Amigo invisible", eyebrow: event.label, previewTitle: event.label,
+        return page("Amigo invisible", eyebrow: event.label, footer: event.message, previewTitle: event.label,
                     previewImage: try imageURL(for: event), """
             <h1>Hola, \(esc(giver.name))</h1>
             <p class="lead">Pulsa «Revelar» para ver el nombre de tu amigo invisible. Que no se entere nadie.</p>
@@ -71,7 +71,7 @@ struct RevealController: RouteCollection {
         let event = try await link.$event.get(on: req.db)
         guard let assignment = try await Assignment.query(on: req.db)
             .filter(\.$giver.$id == giverID).with(\.$receiver).first() else {
-            return page("Sin sorteo", eyebrow: event.label, """
+            return page("Sin sorteo", eyebrow: event.label, footer: event.message, """
                 <h1>Todavía no hay sorteo</h1>
                 <p class="lead">Pide al organizador que lo repita.</p>
                 """)
@@ -80,7 +80,7 @@ struct RevealController: RouteCollection {
         link.usedAt = Date()
         try await link.save(on: req.db)
 
-        return page("Tu amigo invisible", eyebrow: event.label, """
+        return page("Tu amigo invisible", eyebrow: event.label, footer: event.message, """
             <p class="lead">Le haces el regalo a</p>
             <h1 class="name" id="name">\(esc(assignment.receiver.name))</h1>
             <p class="lead">Es un secreto. Feliz Navidad.</p>
@@ -148,12 +148,39 @@ struct RevealController: RouteCollection {
         """
     }.joined(separator: "\n")
 
-    private static let logoSVG = """
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v8h14v-8M12 8v12M12 8c-1.5 0-4-.5-4-2.5S10 3 12 8zM12 8c1.5 0 4-.5 4-2.5S14 3 12 8z"/></svg>
-        """
+    /// Luces del árbol: repartidas por las tres guirnaldas (curvas Q del SVG), alternando amarillo,
+    /// azul y rojo, cada una con su ritmo para que parpadeen como un árbol de verdad.
+    private static let lightsSVG: String = {
+        let garlands: [(p0: (Double, Double), c: (Double, Double), p2: (Double, Double))] = [
+            ((118, 122), (160, 136), (202, 122)),
+            ((102, 190), (160, 208), (218, 190)),
+            ((82, 268), (160, 290), (238, 268)),
+        ]
+        let perGarland = [3, 5, 7]
+        let colors = ["#FFD60A", "#0A84FF", "#FF453A"]   // amarillo, azul, rojo
+        let durations = [1.6, 2.3, 1.9, 2.8, 1.4, 2.1, 2.6]
+        var out: [String] = []
+        var n = 0
+        for (g, garland) in garlands.enumerated() {
+            let count = perGarland[g]
+            for i in 0..<count {
+                let t = (Double(i) + 0.5) / Double(count)
+                let u = 1 - t
+                let x = u * u * garland.p0.0 + 2 * u * t * garland.c.0 + t * t * garland.p2.0
+                let y = u * u * garland.p0.1 + 2 * u * t * garland.c.1 + t * t * garland.p2.1 + 1.5
+                let color = colors[n % 3]
+                let duration = durations[n % durations.count]
+                let delay = Double((n * 7) % 11) / 10
+                let f = { (v: Double) in String(format: "%.1f", v) }
+                out.append("<g class=\"light\" style=\"color:\(color);animation-duration:\(f(duration))s;animation-delay:-\(f(delay))s\" stroke=\"none\" fill=\"currentColor\"><circle cx=\"\(f(x))\" cy=\"\(f(y))\" r=\"10\" opacity=\"0.3\"/><circle cx=\"\(f(x))\" cy=\"\(f(y))\" r=\"4.5\"/></g>")
+                n += 1
+            }
+        }
+        return out.joined(separator: "\n          ")
+    }()
 
     private static let treeSVG = """
-        <svg viewBox="0 0 320 360" width="320" role="img" aria-label="Árbol de Navidad con regalos" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
+        <svg viewBox="0 0 320 360" width="320" role="img" aria-label="Árbol de Navidad con luces y regalos" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
           <polygon points="160,14 165.3,28.7 180.9,29.2 168.6,38.8 172.9,53.8 160,45 147.1,53.8 151.4,38.8 139.1,29.2 154.7,28.7" fill="#FFFFFF"/>
           <polygon points="160,170 40,300 280,300" fill="#000000"/>
           <polygon points="160,110 65,220 255,220" fill="#000000"/>
@@ -162,9 +189,7 @@ struct RevealController: RouteCollection {
           <path d="M118 122 Q160 136 202 122"/>
           <path d="M102 190 Q160 208 218 190"/>
           <path d="M82 268 Q160 290 238 268"/>
-          <circle cx="160" cy="129" r="5" fill="#FFFFFF"/>
-          <circle cx="160" cy="199" r="5" fill="#FFFFFF"/>
-          <circle cx="160" cy="279" r="5" fill="#FFFFFF"/>
+          \(lightsSVG)
           <path d="M60 336 H260"/>
           <rect x="84" y="310" width="36" height="26" fill="#000000"/>
           <path d="M102 310 V336"/>
@@ -173,7 +198,24 @@ struct RevealController: RouteCollection {
         </svg>
         """
 
-    private func page(_ title: String, eyebrow: String? = nil, previewTitle: String = "Amigo invisible",
+    /// Pie de página: el mensaje del evento si tiene, si no una cita de Navidad.
+    private func footerHTML(_ message: String?) -> String {
+        if let message {
+            return """
+                <figure class="quote">
+                  <blockquote class="custom">\(esc(message))</blockquote>
+                </figure>
+                """
+        }
+        return """
+            <figure class="quote">
+              <blockquote>«Es bueno ser niños a veces, y nunca mejor que en Navidad.»</blockquote>
+              <figcaption>Charles Dickens, <cite>Canción de Navidad</cite></figcaption>
+            </figure>
+            """
+    }
+
+    private func page(_ title: String, eyebrow: String? = nil, footer: String? = nil, previewTitle: String = "Amigo invisible",
                       previewImage: String? = nil, _ body: String, status: HTTPStatus = .ok) -> Response {
         let eyebrowHTML = eyebrow.map { "<div class=\"eyebrow\">\(esc($0))</div>" } ?? ""
         let previewDescription = "Descubre a quién le haces el regalo. El enlace solo se puede abrir una vez."
@@ -207,18 +249,22 @@ struct RevealController: RouteCollection {
           .page { position: relative; overflow: hidden; min-height: 100vh; min-height: 100dvh;
                   display: flex; flex-direction: column; }
           .flake { position: absolute; pointer-events: none; }
-          header { position: relative; padding: 32px 48px; display: flex; align-items: center; gap: 12px; }
-          .logo { width: 40px; height: 40px; border-radius: 10px; background: var(--fg); flex: none;
-                  display: flex; align-items: center; justify-content: center; }
-          .brand { font-size: 17px; font-weight: 600; }
           .content { position: relative; flex: 1 1 0; display: flex; align-items: center; justify-content: center;
-                     padding: 24px 48px 64px; }
+                     padding: 64px 48px 48px; }
           .wrap { width: 100%; max-width: 1040px; display: flex; flex-wrap: wrap; align-items: center;
                   justify-content: center; gap: 48px; }
           .text { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 24px;
                   align-items: center; text-align: center; }
           .art { flex: 0 1 320px; min-width: 0; display: flex; justify-content: center; }
           .art svg { max-width: 100%; height: auto; }
+          .light { animation: twinkle 2s ease-in-out infinite; }
+          @keyframes twinkle { 0%, 100% { opacity: 1; } 50% { opacity: .15; } }
+          @media (prefers-reduced-motion: reduce) { .light { animation: none; } }
+          .quote { position: relative; margin: 0; padding: 0 48px 40px; text-align: center; color: var(--muted); }
+          .quote blockquote { margin: 0 auto 8px; max-width: 560px; font-size: 17px; line-height: 1.5;
+                              font-style: italic; text-wrap: balance; }
+          .quote blockquote.custom { white-space: pre-line; overflow-wrap: anywhere; }
+          .quote figcaption { font-size: 13px; letter-spacing: .02em; }
           .eyebrow { font-size: 13px; line-height: 18px; font-weight: 600; letter-spacing: .08em;
                      text-transform: uppercase; color: var(--muted); }
           h1 { margin: 0; font-size: clamp(40px, 6vw, 72px); line-height: 1.02; font-weight: 700;
@@ -235,8 +281,8 @@ struct RevealController: RouteCollection {
           .btn-outline { background: transparent; color: var(--fg); }
           .btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
           @media (max-width: 640px) {
-            header { padding: 24px 16px; }
-            .content { padding: 8px 16px 48px; align-items: flex-start; }
+            .content { padding: 48px 16px 40px; align-items: flex-start; }
+            .quote { padding: 0 16px 32px; }
             .wrap { gap: 40px; }
             .text { flex-basis: 100%; }
             .art svg { width: 220px; }
@@ -247,11 +293,11 @@ struct RevealController: RouteCollection {
         </style></head>
         <body><div class="page">
         \(Self.snowHTML)
-        <header><div class="logo">\(Self.logoSVG)</div><span class="brand">Amigo invisible</span></header>
         <main class="content"><div class="wrap">
           <div class="text">\(eyebrowHTML)\(body)</div>
           <div class="art">\(Self.treeSVG)</div>
         </div></main>
+        \(footerHTML(footer))
         </div></body></html>
         """
         var headers = HTTPHeaders()

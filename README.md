@@ -41,9 +41,9 @@ Todas requieren `Authorization: Bearer <token de sesión>`.
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET/POST | `/events` | Listar / crear evento |
+| GET/POST | `/events` | Listar / crear evento (`name`, `date`, `budget`, `message` opcional) |
 | GET/DELETE | `/events/:id` | Detalle (participantes y exclusiones, nunca asignaciones) / borrar |
-| PATCH | `/events/:id` | Cambiar `name` y/o `date` (solo lo enviado; `"date": null` quita la fecha). Permitido tras el sorteo |
+| PATCH | `/events/:id` | Cambiar `name`, `date` y/o `message` (solo lo enviado; `null` quita la fecha o el mensaje). Permitido tras el sorteo |
 | POST | `/events/:id/participants` | Añadir participante |
 | PUT/DELETE | `/events/:id/participants/:pid` | Editar / quitar. `409` si es tutor de alguien y se intenta borrar o quitarle el teléfono |
 | GET | `/events/:id/participants/:pid/wards` | Participantes que tienen a `:pid` como tutor (`guardianId`) |
@@ -54,7 +54,9 @@ Todas requieren `Authorization: Bearer <token de sesión>`.
 | POST | `/events/:id/links` | Generar enlaces para todos |
 | POST | `/events/:id/participants/:pid/link` | Generar enlace de uno |
 
-Pública: `GET /health`, `GET /r/:token`, `POST /r/:token`.
+`message` (máx. 500 caracteres) se muestra al pie de la web del enlace; si es `null` o vacío, la web muestra una cita de Navidad.
+
+Pública: `GET /health`, `GET /r/:token`, `POST /r/:token`, `GET /og.png`, `GET /og/:evento.png`.
 
 ## Desarrollo local
 La imagen de vista previa de los enlaces (`/og/<evento>.png`) se dibuja con libgd, que hay que tener instalada

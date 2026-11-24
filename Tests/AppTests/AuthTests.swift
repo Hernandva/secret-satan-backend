@@ -333,4 +333,77 @@ final class AuthTests: XCTestCase {
         let (other, _) = try await patch(event.id, #"{"name":"Mío"}"#, token: tokenB)
         XCTAssertEqual(other, .notFound)
     }
+
+    // MARK: - Mensaje del evento
+
+    func testEventMessageCreateAndPatch() async throws {
+        let (_, token) = try await login("lola")
+
+        // Al crear: se guarda sin espacios sobrantes.
+        var created: EventDTO?
+        try await app.test(.POST, "events", beforeRequest: { req async throws in
+            req.headers.bearerAuthorization = .init(token: token)
+            try req.content.encode(CreateEventRequest(name: "Navidad", date: nil, budget: nil, message: "  ¡Feliz Navidad, familia!  "))
+        }, afterResponse: { res async throws in
+            XCTAssertEqual(res.status, .ok)
+            created = try res.content.decode(EventDTO.self)
+        })
+        let event = try XCTUnwrap(created)
+        XCTAssertEqual(event.message, "¡Feliz Navidad, familia!")
+
+        // Sin la clave message: no cambia.
+        let (s1, e1) = try await patch(event.id, #"{"name":"Nochebuena"}"#, token: token)
+        XCTAssertEqual(s1, .ok)
+        XCTAssertEqual(e1?.message, "¡Feliz Navidad, familia!")
+
+        // Solo el mensaje: vale como cambio.
+        let (s2, e2) = try await patch(event.id, #"{"message":"Nos vemos en casa de la abuela"}"#, token: token)
+        XCTAssertEqual(s2, .ok)
+        XCTAssertEqual(e2?.message, "Nos vemos en casa de la abuela")
+
+        // null o vacío lo quitan (la web vuelve a la cita por defecto).
+        let (s3, e3) = try await patch(event.id, #"{"message":null}"#, token: token)
+        XCTAssertEqual(s3, .ok)
+        XCTAssertNil(e3?.message)
+        _ = try await patch(event.id, #"{"message":"Hola"}"#, token: token)
+        let (s4, e4) = try await patch(event.id, #"{"message":"   "}"#, token: token)
+        XCTAssertEqual(s4, .ok)
+        XCTAssertNil(e4?.message)
+
+        // Demasiado largo.
+        let long = String(repeating: "a", count: EventController.maxMessageLength + 1)
+        let (s5, _) = try await patch(event.id, "{\"message\":\"\(long)\"}", token: token)
+        XCTAssertEqual(s5, .badRequest)
+    }
+
+    func testRevealPageShowsEventMessageOrDefaultQuote() async throws {
+        let (user, _) = try await login("mario")
+        let event = Event(ownerID: try user.requireID(), name: "Navidad", date: nil, budget: nil,
+                          message: "Cena a las <b>21h</b>")
+        try await event.save(on: app.db)
+        let ana = Participant(eventID: try event.requireID(), name: "Ana", phone: nil, guardianID: nil)
+        try await ana.save(on: app.db)
+
+        func linkToken() async throws -> String {
+            let token = Tokens.make()
+            try await RevealLink(eventID: try event.requireID(), giverID: try ana.requireID(),
+                                 tokenHash: Tokens.hash(token)).save(on: app.db)
+            return token
+        }
+
+        let first = try await linkToken()
+        try await app.test(.GET, "r/\(first)") { res async throws in
+            XCTAssertEqual(res.status, .ok)
+            XCTAssertTrue(res.body.string.contains("Cena a las &lt;b&gt;21h&lt;/b&gt;"))
+            XCTAssertFalse(res.body.string.contains("Charles Dickens"))
+        }
+
+        event.message = nil
+        try await event.save(on: app.db)
+        let second = try await linkToken()
+        try await app.test(.GET, "r/\(second)") { res async throws in
+            XCTAssertEqual(res.status, .ok)
+            XCTAssertTrue(res.body.string.contains("Charles Dickens"))
+        }
+    }
 }

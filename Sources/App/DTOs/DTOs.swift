@@ -39,23 +39,32 @@ struct CreateEventRequest: Content {
     var name: String
     var date: Date?
     var budget: Double?
+    /// Texto al pie de la web del enlace. Ausente, null o vacío → cita de Navidad por defecto.
+    var message: String? = nil
 }
 
 /// Body de `PATCH /events/:id`. Solo cambia lo que se envía:
 /// - campo ausente → se deja como está
 /// - `"date": null` → se quita la fecha
+/// - `"message": null` (o vacío) → se quita el mensaje y la web vuelve a la cita por defecto
 struct UpdateEventRequest: Content {
     var name: String?
     var date: Date?
     /// true si el JSON incluía la clave `date` (aunque fuera null).
     var hasDate: Bool
+    var message: String?
+    /// true si el JSON incluía la clave `message` (aunque fuera null).
+    var hasMessage: Bool
 
-    enum CodingKeys: String, CodingKey { case name, date }
+    enum CodingKeys: String, CodingKey { case name, date, message }
 
-    init(name: String? = nil, date: Date? = nil, hasDate: Bool = false) {
+    init(name: String? = nil, date: Date? = nil, hasDate: Bool = false,
+         message: String? = nil, hasMessage: Bool = false) {
         self.name = name
         self.date = date
         self.hasDate = hasDate || date != nil
+        self.message = message
+        self.hasMessage = hasMessage || message != nil
     }
 
     init(from decoder: Decoder) throws {
@@ -63,12 +72,15 @@ struct UpdateEventRequest: Content {
         name = try c.decodeIfPresent(String.self, forKey: .name)
         hasDate = c.contains(.date)
         date = try c.decodeIfPresent(Date.self, forKey: .date)
+        hasMessage = c.contains(.message)
+        message = try c.decodeIfPresent(String.self, forKey: .message)
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encodeIfPresent(name, forKey: .name)
         if hasDate { try c.encode(date, forKey: .date) }
+        if hasMessage { try c.encode(message, forKey: .message) }
     }
 }
 
@@ -88,6 +100,8 @@ struct EventDTO: Content {
     var name: String
     var date: Date?
     var budget: Double?
+    /// Mensaje propio del evento; nil si la web usa la cita por defecto.
+    var message: String?
     var status: String
     var participantCount: Int
 }
