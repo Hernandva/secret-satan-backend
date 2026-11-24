@@ -150,13 +150,18 @@ final class RevealLink: Model, @unchecked Sendable {
 }
 
 extension Event {
-    /// "Nombre del evento · 24 de diciembre de 2026" (sin fecha si el evento no la tiene).
-    var label: String {
-        guard let date else { return name }
+    /// "24 de diciembre de 2026", o nil si el evento no tiene fecha.
+    var formattedDate: String? {
+        guard let date else { return nil }
         let f = DateFormatter()
         f.locale = Locale(identifier: "es_ES")
         f.timeZone = TimeZone(identifier: "Europe/Madrid")
         f.dateFormat = "d 'de' MMMM 'de' y"
-        return "\(name) · \(f.string(from: date))"
+        return f.string(from: date)
+    }
+
+    /// "Nombre del evento · 24 de diciembre de 2026" (sin fecha si el evento no la tiene).
+    var label: String {
+        formattedDate.map { "\(name) · \($0)" } ?? name
     }
 }

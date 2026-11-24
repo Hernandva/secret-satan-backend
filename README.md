@@ -57,6 +57,12 @@ Todas requieren `Authorization: Bearer <token de sesión>`.
 Pública: `GET /health`, `GET /r/:token`, `POST /r/:token`.
 
 ## Desarrollo local
+La imagen de vista previa de los enlaces (`/og/<evento>.png`) se dibuja con libgd, que hay que tener instalada
+(en Docker la instala el `Dockerfile`):
+```bash
+brew install gd pkg-config
+```
+
 ```bash
 export APPLE_BUNDLE_ID=dev.hdvillamil.secretsanta   # y/o GOOGLE_CLIENT_ID=...
 swift run App serve

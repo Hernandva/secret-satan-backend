@@ -10,15 +10,40 @@ struct RevealController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
         routes.get("r", ":token", use: confirm)
         routes.post("r", ":token", use: reveal)
-        routes.get("og.png", use: ogImage)
+        routes.get("og.png", use: genericImage)
+        routes.get("og", ":image", use: eventImage)
     }
 
-    /// Imagen de la vista previa del enlace (og:image).
-    @Sendable func ogImage(req: Request) async throws -> Response {
+    // MARK: - Imagen de la vista previa (og:image)
+
+    /// Genérica: para enlaces caducados o no válidos.
+    @Sendable func genericImage(req: Request) async throws -> Response {
+        pngResponse(OGRenderer.render(title: "Amigo invisible", subtitle: "Descubre a quién le haces el regalo."))
+    }
+
+    /// Por evento: `/og/<id del evento>.png`, con el nombre y la fecha del evento.
+    /// Se dibuja al pedirla (WhatsApp la pide al crear la vista previa); no se guarda.
+    @Sendable func eventImage(req: Request) async throws -> Response {
+        guard let file = req.parameters.get("image"), file.hasSuffix(".png"),
+              let id = UUID(uuidString: String(file.dropLast(4))),
+              let event = try await Event.find(id, on: req.db) else {
+            throw Abort(.notFound)
+        }
+        return pngResponse(OGRenderer.render(title: event.name, subtitle: event.formattedDate))
+    }
+
+    /// URL absoluta de la imagen de un evento. `v` cambia con el nombre y la fecha,
+    /// así los enlaces nuevos no reutilizan una imagen antigua que esté en caché.
+    private func imageURL(for event: Event) throws -> String {
+        let version = Tokens.hash(event.label).prefix(8)
+        return "\(Environment.baseURL)/og/\(try event.requireID().uuidString.lowercased()).png?v=\(version)"
+    }
+
+    private func pngResponse(_ png: Data) -> Response {
         var headers = HTTPHeaders()
         headers.contentType = .png
         headers.replaceOrAdd(name: .cacheControl, value: "public, max-age=86400")
-        return Response(status: .ok, headers: headers, body: .init(data: OGImage.png))
+        return Response(status: .ok, headers: headers, body: .init(data: png))
     }
 
     @Sendable func confirm(req: Request) async throws -> Response {
@@ -28,7 +53,8 @@ struct RevealController: RouteCollection {
         let giver = try await link.$giver.get(on: req.db)
         let event = try await link.$event.get(on: req.db)
         // La vista previa la ve cualquiera en el chat: solo el evento, nunca nombres de personas.
-        return page("Amigo invisible", eyebrow: event.label, previewTitle: event.label, """
+        return page("Amigo invisible", eyebrow: event.label, previewTitle: event.label,
+                    previewImage: try imageURL(for: event), """
             <h1>Hola, \(esc(giver.name))</h1>
             <p class="lead">Pulsa «Revelar» para ver el nombre de tu amigo invisible. Que no se entere nadie.</p>
             <form method="post" action="/r/\(token)"><button type="submit" class="btn">Revelar</button></form>
@@ -148,10 +174,10 @@ struct RevealController: RouteCollection {
         """
 
     private func page(_ title: String, eyebrow: String? = nil, previewTitle: String = "Amigo invisible",
-                      _ body: String, status: HTTPStatus = .ok) -> Response {
+                      previewImage: String? = nil, _ body: String, status: HTTPStatus = .ok) -> Response {
         let eyebrowHTML = eyebrow.map { "<div class=\"eyebrow\">\(esc($0))</div>" } ?? ""
         let previewDescription = "Descubre a quién le haces el regalo. El enlace solo se puede abrir una vez."
-        let ogImage = "\(Environment.baseURL)/og.png"
+        let ogImage = previewImage ?? "\(Environment.baseURL)/og.png"
         let html = """
         <!doctype html>
         <html lang="es"><head>
@@ -169,7 +195,7 @@ struct RevealController: RouteCollection {
         <meta property="og:image:type" content="image/png">
         <meta property="og:image:width" content="1200">
         <meta property="og:image:height" content="630">
-        <meta property="og:image:alt" content="Árbol de Navidad con regalos y el texto Amigo invisible">
+        <meta property="og:image:alt" content="\(esc(previewTitle)), junto a un árbol de Navidad con regalos">
         <meta name="twitter:card" content="summary_large_image">
         <title>\(esc(title))</title>
         <style>

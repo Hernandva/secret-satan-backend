@@ -1,6 +1,10 @@
 # ---- Build ----
 FROM swift:6.4-jammy AS build
 WORKDIR /build
+# libgd: imagen de vista previa de los enlaces (Sources/Cgd).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libgd-dev pkg-config \
+ && rm -rf /var/lib/apt/lists/*
 COPY Package.swift Package.resolved* ./
 RUN swift package resolve
 COPY Sources ./Sources
@@ -10,7 +14,7 @@ RUN swift build -c release --product App --static-swift-stdlib
 # ---- Runtime ----
 FROM ubuntu:jammy
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates tzdata \
+ && apt-get install -y --no-install-recommends ca-certificates tzdata libgd3 fontconfig fonts-inter \
  && rm -rf /var/lib/apt/lists/*
 RUN useradd --user-group --create-home --system --no-log-init --home-dir /app vapor
 WORKDIR /app

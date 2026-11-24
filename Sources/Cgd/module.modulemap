@@ -1,0 +1,5 @@
+module Cgd [system] {
+    header "shim.h"
+    link "gd"
+    export *
+}
