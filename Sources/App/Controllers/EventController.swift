@@ -253,9 +253,9 @@ struct EventController: RouteCollection {
         do {
             result = try DrawService.draw(people: people, forbidden: forbidden)
         } catch DrawError.notEnoughPeople {
-            throw Abort(.unprocessableEntity, reason: "Hacen falta al menos 2 participantes.")
+            throw Abort(.unprocessableEntity, reason: "Hacen falta al menos 3 participantes.")
         } catch {
-            throw Abort(.unprocessableEntity, reason: "No existe un sorteo válido con estas restricciones (exclusiones y niños que no pueden regalar a su tutor). Prueba a quitar alguna exclusión o a añadir participantes.")
+            throw Abort(.unprocessableEntity, reason: "No existe un sorteo válido con estas restricciones (exclusiones, niños que no pueden regalar a su tutor y sin regalos cruzados). Prueba a quitar alguna exclusión o a añadir participantes.")
         }
 
         try await req.db.transaction { db in

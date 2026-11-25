@@ -135,12 +135,13 @@ final class AuthTests: XCTestCase {
         let event = try await createEvent("Navidad", token: token)
         let (_, ana) = try await addParticipant(event.id, "Ana", token: token)
         _ = try await addParticipant(event.id, "Bruno", token: token)
+        _ = try await addParticipant(event.id, "Carla", token: token)
 
         try await app.test(.POST, "events/\(event.id)/draw", headers: auth) { res async throws in
             XCTAssertEqual(res.status, .ok)
         }
 
-        let (postStatus, _) = try await addParticipant(event.id, "Carla", token: token)
+        let (postStatus, _) = try await addParticipant(event.id, "Diana", token: token)
         XCTAssertEqual(postStatus, .conflict)
 
         let anaID = try XCTUnwrap(ana?.id)
@@ -148,7 +149,18 @@ final class AuthTests: XCTestCase {
             XCTAssertEqual(res.status, .conflict)
         }
         let count = try await Participant.query(on: app.db).filter(\.$event.$id == event.id).count()
-        XCTAssertEqual(count, 2)
+        XCTAssertEqual(count, 3)
+    }
+
+    func testDrawNeedsThreeParticipants() async throws {
+        let (_, token) = try await login("ines")
+        let event = try await createEvent("Navidad", token: token)
+        _ = try await addParticipant(event.id, "Ana", token: token)
+        _ = try await addParticipant(event.id, "Bruno", token: token)
+        try await app.test(.POST, "events/\(event.id)/draw", headers: ["Authorization": "Bearer \(token)"]) { res async throws in
+            XCTAssertEqual(res.status, .unprocessableEntity)
+            XCTAssertTrue(res.body.string.contains("al menos 3"))
+        }
     }
 
     // MARK: - Contactos y tutores

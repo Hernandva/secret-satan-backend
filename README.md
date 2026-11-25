@@ -7,7 +7,8 @@ Backend (Swift + Vapor + SQLite) de la app de amigo secreto.
    (nombre, teléfono y, para los niños, el tutor que recibe su enlace).
 2. `POST /events/:id/draw` hace el sorteo en el servidor (sin autoasignación,
    respetando exclusiones y sin que un niño regale a su tutor, que es quien recibe su enlace;
-   el tutor sí puede regalar al niño).
+   el tutor sí puede regalar al niño). Sin regalos cruzados: si A regala a B, B no regala a A,
+   por lo que hacen falta al menos 3 participantes.
 3. `POST /events/:id/links` genera un enlace de un solo uso por participante; la app los
    comparte con la hoja "Compartir" de iOS (a todos o a uno).
 4. Cada persona abre su enlace `https://secretsanta.hdvillamil.dev/r/<token>`, pulsa

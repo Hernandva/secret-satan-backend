@@ -6,7 +6,8 @@ enum DrawError: Error {
 }
 
 /// Sorteo con restricciones mediante backtracking.
-/// Reglas: nadie se toca a sí mismo y se respetan los pares prohibidos (exclusiones).
+/// Reglas: nadie se toca a sí mismo, se respetan los pares prohibidos (exclusiones)
+/// y no hay regalos cruzados (si A regala a B, B no puede regalar a A).
 enum DrawService {
     struct Person {
         let id: UUID
@@ -19,7 +20,8 @@ enum DrawService {
 
     /// Devuelve un diccionario giver -> receiver.
     static func draw(people: [Person], forbidden: Set<Pair>) throws -> [UUID: UUID] {
-        guard people.count >= 2 else { throw DrawError.notEnoughPeople }
+        // Con 2 personas el único reparto posible es cruzado.
+        guard people.count >= 3 else { throw DrawError.notEnoughPeople }
 
         func allowed(_ giver: Person, _ receiver: Person) -> Bool {
             if giver.id == receiver.id { return false }
@@ -42,7 +44,8 @@ enum DrawService {
         func solve(_ index: Int) -> Bool {
             if index == order.count { return true }
             let giver = order[index]
-            for receiver in candidates[giver.id]! where !used.contains(receiver.id) {
+            for receiver in candidates[giver.id]!
+            where !used.contains(receiver.id) && result[receiver.id] != giver.id {  // sin regalos cruzados
                 used.insert(receiver.id)
                 result[giver.id] = receiver.id
                 if solve(index + 1) { return true }
